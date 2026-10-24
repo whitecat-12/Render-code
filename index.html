@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code → PDF (VS Code Style)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #252526; color: #ccc;
+    display: flex; overflow: hidden;
+  }
+  .left-panel, .right-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .left-panel { border-right: 1px solid #3c3c3c; }
+
+  .toolbar {
+    padding: 10px 12px; background: #2d2d30;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    border-bottom: 1px solid #3c3c3c; font-size: 12px;
+  }
+  .toolbar label { color: #999; }
+  .toolbar select, .toolbar input[type=text] {
+    background: #3c3c3c; color: #e0e0e0; border: 1px solid #555;
+    padding: 6px 8px; border-radius: 3px; font-size: 12px; font-family: inherit;
+  }
+  .toolbar input[type=text] { width: 140px; }
+  .toolbar button {
+    background: #0e639c; color: white; border: none;
+    padding: 7px 14px; border-radius: 3px; cursor: pointer;
+    font-size: 12px; font-weight: 500; white-space: nowrap;
+  }
+  .toolbar button:hover { background: #1177bb; }
+  .toolbar button.secondary { background: #3c3c3c; }
+  .toolbar button.secondary:hover { background: #4c4c4c; }
+  .toolbar button.success { background: #16825d; }
+  .toolbar button.success:hover { background: #1a9c6e; }
+  .toolbar button:disabled { opacity: .6; cursor: wait; }
+  .toolbar .checkbox-label {
+    display: flex; align-items: center; gap: 4px;
+    color: #ccc; cursor: pointer; user-select: none;
+  }
+
+  #codeInput {
+    flex: 1; background: #1e1e1e; color: #d4d4d4; border: none;
+    padding: 16px; font-family: 'Consolas','Monaco','Courier New',monospace;
+    font-size: 13px; line-height: 1.55; resize: none; outline: none;
+    tab-size: 4;
+  }
+
+  .preview-wrapper {
+    flex: 1; overflow: auto; padding: 24px; background: #1a1a1a;
+    display: flex; justify-content: center; align-items: flex-start;
+  }
+  .vscode-window {
+    background: #1e1e1e; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); width: 100%; max-width: 950px;
+    font-family: 'Consolas','Monaco','Courier New',monospace;
+    font-size: 13px; line-height: 1.55;
+  }
+  .title-bar {
+    background: #323233; padding: 8px 12px; display: flex;
+    align-items: center; gap: 12px; border-bottom: 1px solid #252526;
+  }
+  .dots { display: flex; gap: 7px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.red { background: #ff5f57; }
+  .dot.yellow { background: #febc2e; }
+  .dot.green { background: #28c840; }
+  .title-text { color: #999; font-size: 12px; }
+
+  .tab-bar { background: #2d2d30; display: flex; border-bottom: 1px solid #252526; }
+  .tab {
+    background: #1e1e1e; color: #d4d4d4; padding: 8px 16px;
+    display: flex; align-items: center; gap: 8px; font-size: 12px; position: relative;
+  }
+  .tab::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 1px; background: #007acc;
+  }
+  .tab-icon { width: 14px; height: 14px; border-radius: 2px; background: #519aba; flex-shrink: 0; }
+
+  .code-lines { padding: 12px 16px 12px 0; background: #1e1e1e; overflow-x: auto; }
+  .code-line { display: flex; min-height: 1.55em; }
+  .code-line .ln {
+    flex-shrink: 0; width: 50px; text-align: right; padding-right: 16px;
+    color: #858585; user-select: none; font-variant-numeric: tabular-nums;
+  }
+  .code-line .lc {
+    flex: 1; min-width: 0;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .nowrap .code-line .lc { white-space: pre; word-break: normal; }
+
+  .status-bar {
+    background: #007acc; color: white; padding: 4px 12px; font-size: 11px;
+    display: flex; justify-content: space-between; user-select: none;
+  }
+
+  /* ============ VS Code Dark+ theme ============ */
+  .hljs { color: #d4d4d4; }
+  .hljs-keyword, .hljs-literal, .hljs-symbol, .hljs-name { color: #569cd6; }
+  .hljs-built_in, .hljs-type { color: #4ec9b0; }
+  .hljs-number { color: #b5cea8; }
+  .hljs-string, .hljs-attr .hljs-string, .hljs-template-tag { color: #ce9178; }
+  .hljs-comment, .hljs-quote { color: #6a9955; font-style: italic; }
+  .hljs-function, .hljs-title, .hljs-title.function_ { color: #dcdcaa; }
+  .hljs-title.class_, .hljs-class .hljs-title { color: #4ec9b0; }
+  .hljs-params, .hljs-variable { color: #9cdcfe; }
+  .hljs-variable.language_ { color: #569cd6; }
+  .hljs-attr, .hljs-property, .hljs-attribute { color: #9cdcfe; }
+  .hljs-tag, .hljs-selector-tag { color: #569cd6; }
+  .hljs-selector-class, .hljs-selector-id { color: #d7ba7d; }
+  .hljs-meta { color: #569cd6; }
+  .hljs-regexp { color: #d16969; }
+  .hljs-char.escape_ { color: #d7ba7d; }
+  .hljs-operator, .hljs-punctuation { color: #d4d4d4; }
+  .hljs-doctag { color: #608b4e; }
+  .hljs-section { color: #569cd6; font-weight: bold; }
+  .hljs-subst { color: #d4d4d4; }
+
+  /* ============ Print styles ============ */
+  @media print {
+    body { background: white; display: block; overflow: visible; height: auto; }
+    .left-panel, .toolbar { display: none !important; }
+    .right-panel { display: block; }
+    .preview-wrapper {
+      padding: 0; background: white; overflow: visible;
+      display: block; height: auto;
+    }
+    .vscode-window { box-shadow: none; border-radius: 0; max-width: 100%; width: 100%; }
+    @page { margin: 10mm; }
+    .code-line { break-inside: avoid; }
+  }
+
+  @media (max-width: 768px) {
+    body { flex-direction: column; }
+    .left-panel { border-right: none; border-bottom: 1px solid #3c3c3c; height: 50%; }
+    .right-panel { height: 50%; }
+    .preview-wrapper { padding: 12px; }
+  }
+</style>
+</head>
+<body>
+  <div class="left-panel">
+    <div class="toolbar">
+      <label>Bahasa</label>
+      <select id="language">
+        <option value="auto">Auto-detect</option>
+        <option value="javascript" selected>JavaScript</option>
+        <option value="typescript">TypeScript</option>
+        <option value="python">Python</option>
+        <option value="html">HTML</option>
+        <option value="css">CSS</option>
+        <option value="java">Java</option>
+        <option value="cpp">C++</option>
+        <option value="csharp">C#</option>
+        <option value="php">PHP</option>
+        <option value="go">Go</option>
+        <option value="rust">Rust</option>
+        <option value="sql">SQL</option>
+        <option value="json">JSON</option>
+        <option value="bash">Bash</option>
+        <option value="yaml">YAML</option>
+        <option value="xml">XML</option>
+        <option value="plaintext">Plain Text</option>
+      </select>
+      <label>File</label>
+      <input type="text" id="filename" value="script.js">
+      <label class="checkbox-label"><input type="checkbox" id="wrapLines" checked> Wrap</label>
+      <button id="renderBtn">Render</button>
+    </div>
+    <textarea id="codeInput" spellcheck="false" placeholder="Paste kode di sini..."></textarea>
+  </div>
+
+  <div class="right-panel">
+    <div class="toolbar">
+      <button id="downloadBtn" class="success">Download PDF</button>
+      <button id="printBtn" class="secondary">Print / Save PDF</button>
+      <label>Orientasi</label>
+      <select id="orientation">
+        <option value="portrait">Portrait</option>
+        <option value="landscape">Landscape</option>
+      </select>
+    </div>
+    <div class="preview-wrapper">
+      <div class="vscode-window" id="vscodeWindow">
+        <div class="title-bar">
+          <div class="dots">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <span class="title-text" id="windowTitle">script.js — Visual Studio Code</span>
+        </div>
+        <div class="tab-bar">
+          <div class="tab">
+            <span class="tab-icon" id="tabIcon"></span>
+            <span id="tabName">script.js</span>
+          </div>
+        </div>
+        <div class="code-lines" id="codeOutput"></div>
+        <div class="status-bar">
+          <span>Ln 1, Col 1</span>
+          <span id="statusRight">UTF-8 &nbsp; JavaScript &nbsp; UTF-8</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const codeInput = $('codeInput');
+  const codeOutput = $('codeOutput');
+  const languageSelect = $('language');
+  const filenameInput = $('filename');
+  const wrapLines = $('wrapLines');
+  const vscodeWindow = $('vscodeWindow');
+
+  const langInfo = {
+    javascript: { ext: 'js', color: '#f1e05a', status: 'JavaScript' },
+    typescript: { ext: 'ts', color: '#3178c6', status: 'TypeScript' },
+    python: { ext: 'py', color: '#3572A5', status: 'Python' },
+    html: { ext: 'html', color: '#e34c26', status: 'HTML' },
+    css: { ext: 'css', color: '#563d7c', status: 'CSS' },
+    java: { ext: 'java', color: '#b07219', status: 'Java' },
+    cpp: { ext: 'cpp', color: '#f34b7d', status: 'C++' },
+    csharp: { ext: 'cs', color: '#178600', status: 'C#' },
+    php: { ext: 'php', color: '#4F5D95', status: 'PHP' },
+    go: { ext: 'go', color: '#00ADD8', status: 'Go' },
+    rust: { ext: 'rs', color: '#dea584', status: 'Rust' },
+    sql: { ext: 'sql', color: '#e38c00', status: 'SQL' },
+    json: { ext: 'json', color: '#cbcb41', status: 'JSON' },
+    bash: { ext: 'sh', color: '#89e051', status: 'Shell' },
+    yaml: { ext: 'yml', color: '#cb171e', status: 'YAML' },
+    xml: { ext: 'xml', color: '#0060ac', status: 'XML' },
+    plaintext: { ext: 'txt', color: '#888888', status: 'Plain Text' }
+  };
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function autoDetect(code) {
+    if (/^\s*<(!DOCTYPE|html)/i.test(code)) return 'html';
+    if (/^\s*(def |from \w+ import |import \w+$)/m.test(code)) return 'python';
+    if (/#include|using namespace|int main\s*\(/.test(code)) return 'cpp';
+    if (/public\s+(class|static|void)\s|import java/.test(code)) return 'java';
+    if (/<\?php/.test(code)) return 'php';
+    if (/^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE)\s/i.test(code)) return 'sql';
+    if (/^\s*[\[{]/.test(code.trim()) && /["'][^"']+["']\s*:/.test(code)) return 'json';
+    if (/^\s*(package |func )/m.test(code)) return 'go';
+    if (/\bfn\s+\w+|let\s+mut\b/.test(code)) return 'rust';
+    if (/\b(function|const|let|var|=>)\b/.test(code)) return 'javascript';
+    if (/^\s*[\w-]+\s*:\s*[^\n]*$/m.test(code) && !/[;{}]/.test(code)) return 'yaml';
+    return 'plaintext';
+  }
+
+  // Split highlighted HTML into lines, preserving open spans across newlines
+  function splitHighlightedLines(html) {
+    const lines = [];
+    let current = '';
+    let i = 0;
+    const tagStack = [];
+
+    while (i < html.length) {
+      const ch = html[i];
+      if (ch === '<') {
+        const end = html.indexOf('>', i);
+        if (end === -1) { current += html.slice(i); break; }
+        const tag = html.slice(i, end + 1);
+        if (tag.startsWith('</')) {
+          const name = tag.slice(2, -1).trim();
+          for (let k = tagStack.length - 1; k >= 0; k--) {
+            if (tagStack[k].name === name) { tagStack.splice(k, 1); break; }
+          }
+          current += tag;
+        } else if (tag.endsWith('/>')) {
+          current += tag;
+        } else {
+          const m = tag.match(/^<(\w[\w-]*)/);
+          if (m) tagStack.push({ name: m[1], tag });
+          current += tag;
+        }
+        i = end + 1;
+      } else if (ch === '\n') {
+        let line = current;
+        for (let j = tagStack.length - 1; j >= 0; j--) line += '</' + tagStack[j].name + '>';
+        lines.push(line);
+        current = tagStack.map(t => t.tag).join('');
+        i++;
+      } else {
+        current += ch;
+        i++;
+      }
+    }
+    lines.push(current);
+    return lines;
+  }
+
+  function updateMeta() {
+    let lang = languageSelect.value;
+    if (lang === 'auto') lang = autoDetect(codeInput.value);
+    const info = langInfo[lang] || langInfo.plaintext;
+
+    const cur = filenameInput.value.trim();
+    const isDefault = /^script\.\w+$/.test(cur) || cur === '' || cur === 'untitled';
+    const name = isDefault ? `script.${info.ext}` : cur;
+    if (isDefault && cur !== name) filenameInput.value = name;
+
+    $('tabName').textContent = name;
+    $('windowTitle').textContent = `${name} — Visual Studio Code`;
+    $('statusRight').innerHTML = `UTF-8 &nbsp; ${info.status} &nbsp; UTF-8`;
+    $('tabIcon').style.background = info.color;
+    return lang;
+  }
+
+  function render() {
+    const code = codeInput.value;
+    let lang = languageSelect.value;
+    if (lang === 'auto') lang = autoDetect(code);
+
+    let highlighted;
+    if (window.hljs && lang && lang !== 'plaintext') {
+      try {
+        highlighted = hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+      } catch (e) {
+        highlighted = escapeHtml(code);
+      }
+    } else {
+      highlighted = escapeHtml(code);
+    }
+
+    const lines = splitHighlightedLines(highlighted);
+    codeOutput.innerHTML = lines.map((line, i) =>
+      `<div class="code-line"><span class="ln">${i + 1}</span><span class="lc">${line || ' '}</span></div>`
+    ).join('');
+
+    updateMeta();
+  }
+
+  function applyWrap() {
+    vscodeWindow.classList.toggle('nowrap', !wrapLines.checked);
+  }
+
+  let debounceTimer;
+  codeInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(render, 200);
+  });
+  languageSelect.addEventListener('change', render);
+  filenameInput.addEventListener('input', updateMeta);
+  wrapLines.addEventListener('change', applyWrap);
+  $('renderBtn').addEventListener('click', render);
+
+  codeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = codeInput.selectionStart;
+      const end = codeInput.selectionEnd;
+      codeInput.value = codeInput.value.slice(0, start) + '  ' + codeInput.value.slice(end);
+      codeInput.selectionStart = codeInput.selectionEnd = start + 2;
+      render();
+    }
+  });
+
+  // ============ Download PDF ============
+  $('downloadBtn').addEventListener('click', async () => {
+    const btn = $('downloadBtn');
+    const origText = btn.textContent;
+    btn.textContent = 'Membuat PDF...';
+    btn.disabled = true;
+
+    const filename = (filenameInput.value.trim() || 'code').replace(/\.[^/.]+$/, '') + '.pdf';
+    const orientation = $('orientation').value;
+
+    // Ensure wrap for PDF (so nothing is cut off)
+    const wasNowrap = vscodeWindow.classList.contains('nowrap');
+    vscodeWindow.classList.remove('nowrap');
+
+    // Temporarily remove clipping ancestors so full content is captured
+    const preview = vscodeWindow.closest('.preview-wrapper');
+    const rightPanel = vscodeWindow.closest('.right-panel');
+    const saved = {
+      bodyOverflow: document.body.style.overflow,
+      bodyHeight: document.body.style.height,
+      previewOverflow: preview.style.overflow,
+      previewHeight: preview.style.height,
+      panelHeight: rightPanel.style.height,
+    };
+    document.body.style.overflow = 'visible';
+    document.body.style.height = 'auto';
+    preview.style.overflow = 'visible';
+    preview.style.height = 'auto';
+    rightPanel.style.height = 'auto';
+
+    const opt = {
+      margin: [6, 6, 6, 6],
+      filename,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: {
+        scale: 2, useCORS: true, backgroundColor: '#1e1e1e',
+        logging: false, scrollX: 0, scrollY: 0
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation },
+      pagebreak: { mode: ['css', 'legacy'] }
+    };
+
+    try {
+      await html2pdf().set(opt).from(vscodeWindow).save();
+    } catch (err) {
+      alert('Gagal membuat PDF: ' + err.message + '\n\nCoba tombol "Print / Save PDF".');
+    } finally {
+      // Restore
+      document.body.style.overflow = saved.bodyOverflow;
+      document.body.style.height = saved.bodyHeight;
+      preview.style.overflow = saved.previewOverflow;
+      preview.style.height = saved.previewHeight;
+      rightPanel.style.height = saved.panelHeight;
+      if (wasNowrap) vscodeWindow.classList.add('nowrap');
+      btn.textContent = origText;
+      btn.disabled = false;
+    }
+  });
+
+  $('printBtn').addEventListener('click', () => window.print());
+
+  // ============ Sample code ============
+  const sample = `function greet(name) {
+  // Sapa pengguna dengan pesan
+  const message = \`Hello, \${name}!\`;
+  console.log(message);
+  return message;
+}
+
+const users = ['Alice', 'Bob', 'Charlie'];
+users.forEach(user => greet(user));
+
+class Calculator {
+  constructor() {
+    this.history = [];
+  }
+
+  add(a, b) {
+    const result = a + b;
+    this.history.push(\`\${a} + \${b} = \${result}\`);
+    return result;
+  }
+}
+
+const calc = new Calculator();
+console.log(calc.add(5, 3)); // 8`;
+
+  codeInput.value = sample;
+  applyWrap();
+  render();
+</script>
+</body>
+</html>
